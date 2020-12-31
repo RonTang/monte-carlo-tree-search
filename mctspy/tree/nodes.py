@@ -2,19 +2,20 @@ import numpy as np
 from collections import defaultdict
 from abc import ABC, abstractmethod
 
-
 class MonteCarloTreeSearchNode(ABC):
 
-    def __init__(self, state, parent=None):
+    def __init__(self, state, parent=None,action=None):
         """
         Parameters
         ----------
         state : mctspy.games.common.TwoPlayersAbstractGameState
         parent : MonteCarloTreeSearchNode
         """
+        self.id = id(self)
         self.state = state
         self.parent = parent
         self.children = []
+        self.action = action     
 
     @property
     @abstractmethod
@@ -38,8 +39,13 @@ class MonteCarloTreeSearchNode(ABC):
     def n(self):
         pass
 
+    @property
     @abstractmethod
-    def expand(self):
+    def o(self):
+        pass
+
+    @abstractmethod
+    def expand(self,manager):
         pass
 
     @abstractmethod
@@ -59,10 +65,14 @@ class MonteCarloTreeSearchNode(ABC):
 
     def best_child(self, c_param=1.4):
         choices_weights = [
-            (c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n))
+            (c.q/ (c.n+1e-6)) + c_param * np.sqrt((2 * np.log(self.n + self.o) / (c.n + c.o)))
             for c in self.children
         ]
-        return self.children[np.argmax(choices_weights)]
+        best_child = self.children[np.argmax(choices_weights)]
+        if c_param > 0:
+            best_child.add_o()
+        return best_child
+       
 
     def rollout_policy(self, possible_moves):        
         return possible_moves[np.random.randint(len(possible_moves))]
@@ -70,12 +80,12 @@ class MonteCarloTreeSearchNode(ABC):
 
 class TwoPlayersGameMonteCarloTreeSearchNode(MonteCarloTreeSearchNode):
 
-    def __init__(self, state, parent=None):
-        super().__init__(state, parent)
+    def __init__(self, state, parent=None,action=None):
+        super().__init__(state, parent, action)
         self._number_of_visits = 0.
         self._results = defaultdict(int)
         self._untried_actions = None
-
+        self._incomplete_updates = 0
     @property
     def untried_actions(self):
         if self._untried_actions is None:
@@ -92,13 +102,20 @@ class TwoPlayersGameMonteCarloTreeSearchNode(MonteCarloTreeSearchNode):
     def n(self):
         return self._number_of_visits
 
+    @property
+    def o(self):
+        return self._incomplete_updates
+
+    
     def expand(self):
+        
         action = self.untried_actions.pop()
         next_state = self.state.move(action)
         child_node = TwoPlayersGameMonteCarloTreeSearchNode(
-            next_state, parent=self
-        )
+                next_state, parent=self,action=action
+            )
         self.children.append(child_node)
+        child_node.add_o()
         return child_node
 
     def is_terminal_node(self):
@@ -112,8 +129,19 @@ class TwoPlayersGameMonteCarloTreeSearchNode(MonteCarloTreeSearchNode):
             current_rollout_state = current_rollout_state.move(action)
         return current_rollout_state.game_result
 
+    def add_o(self):
+        self._incomplete_updates += 1.
+        if self.parent:
+            self.parent.add_o()
+        
     def backpropagate(self, result):
         self._number_of_visits += 1.
         self._results[result] += 1.
+        self._incomplete_updates -= 1.
+        
         if self.parent:
             self.parent.backpropagate(result)
+
+          
+
+

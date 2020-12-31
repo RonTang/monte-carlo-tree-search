@@ -1,6 +1,13 @@
-class MonteCarloTreeSearch(object):
+import numpy as np
+import ctypes,time
 
-    def __init__(self, node):
+class MonteCarloTreeSearch(object):
+    @staticmethod
+    def para_rollout(v):
+        reward = v.rollout()
+        return v.id,reward
+    
+    def __init__(self, node, pool):
         """
         MonteCarloTreeSearchNode
         Parameters
@@ -8,7 +15,22 @@ class MonteCarloTreeSearch(object):
         node : mctspy.tree.nodes.MonteCarloTreeSearchNode
         """
         self.root = node
-
+        self.pool = pool
+    
+    def best_action2(self,simulations_number):
+        if self.pool:
+            
+            nodes = (self._tree_policy() for i in range(simulations_number))
+            results = self.pool.imap_unordered(MonteCarloTreeSearch.para_rollout,nodes,chunksize = 140)
+            #nodes = [self._tree_policy() for i in range(simulations_number)]
+            #results = self.pool.map(MonteCarloTreeSearch.para_rollout,nodes,chunksize = 128)
+            for result in results:
+                node_id,reward = result
+                node = ctypes.cast(node_id, ctypes.py_object).value
+                node.backpropagate(reward)
+         
+        # to select best child go for exploitation only
+        return self.root.best_child(c_param=0.)
     def best_action(self, simulations_number):
         """
 
@@ -21,10 +43,17 @@ class MonteCarloTreeSearch(object):
         -------
 
         """
-        for _ in range(0, simulations_number):            
-            v = self._tree_policy()
-            reward = v.rollout()
-            v.backpropagate(reward)
+        if self.pool:
+            
+            nodes = (self._tree_policy() for i in range(simulations_number))
+            results = self.pool.imap_unordered(MonteCarloTreeSearch.para_rollout,nodes,chunksize = 24)
+            #nodes = [self._tree_policy() for i in range(simulations_number)]
+            #results = self.pool.map(MonteCarloTreeSearch.para_rollout,nodes,chunksize = 128)
+            for result in results:
+                node_id,reward = result
+                node = ctypes.cast(node_id, ctypes.py_object).value
+                node.backpropagate(reward)
+         
         # to select best child go for exploitation only
         return self.root.best_child(c_param=0.)
 
