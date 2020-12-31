@@ -36,4 +36,6 @@ best_node = mcts.best_action(10000)
 If you want to apply MCTS for your own game, its state implementation should derive from  
 `mmctspy.games.common.TwoPlayersGameState` 
 
-(lookup `mctspy.games.examples.tictactoe.TicTacToeGameState` for inspiration)
+(lookup `mctspy.games.examples.tictactoe.TicTacToeGameState` or `mctspy.games.examples.fourinrow.FourInRowGameState` for inspiration)
+
+![Output sample](https://github.com/RonTang/monte-carlo-tree-search/blob/master/images/example.gif)
